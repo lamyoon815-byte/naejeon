@@ -23,3 +23,11 @@ describe("규pt verdicts", () => {
     expect(mid.every((line) => line.includes("🚫"))).toBe(true);
   });
 });
+
+describe("particle fixing", () => {
+  it("matches particles to the name's final consonant", async () => {
+    const { fixParticles } = await import("./verdict");
+    expect(fixParticles("정글은 동완랑 비슷, 김하승랑도!", ["동완", "김하승"])).toBe("정글은 동완이랑 비슷, 김하승이랑도!");
+    expect(fixParticles("민수이랑 붙으면 동완는 진다", ["민수", "동완"])).toBe("민수랑 붙으면 동완은 진다");
+  });
+});

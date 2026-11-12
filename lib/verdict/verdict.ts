@@ -1,52 +1,96 @@
 import { ROLES, type BalancePlayer, type Role } from "@/lib/domain";
 import { roleStrength } from "@/lib/balancer/scoring";
 
-const LANE: Record<Role, string> = { TOP: "탑", JUNGLE: "정글", MID: "미드", ADC: "원딜", SUPPORT: "서폿" };
+export const LANE: Record<Role, string> = { TOP: "탑", JUNGLE: "정글", MID: "미드", ADC: "원딜", SUPPORT: "서폿" };
 /** Lane strengths closer than this read as "about the same". */
 const SIMILAR = 2;
 
-type Pick = <T>(items: readonly T[]) => T;
-const josa = (word: string, withBatchim: string, without: string) => {
-  const code = word.charCodeAt(word.length - 1) - 0xac00;
-  return code >= 0 && code <= 11171 && code % 28 !== 0 ? withBatchim : without;
-};
-const eun = (w: string) => w + josa(w, "은", "는");
-const rang = (w: string) => w + josa(w, "이랑", "랑");
+export type Pick = <T>(items: readonly T[]) => T;
+
+/** One comparison, computed by the engine. Names only — never numbers. */
+export type VerdictFact =
+  | { role: Role; kind: "between"; down: string; up: string }
+  | { role: Role; kind: "similar"; sim: string }
+  | { role: Role; kind: "top"; down: string }
+  | { role: Role; kind: "bottom"; up: string }
+  | { role: Role; kind: "forbidden" };
 
 /**
- * Playful, number-free comparisons of one player's lanes against everyone
- * else's strength in the same lane. Neighbours are picked at random among the
- * closest few, so asking again gives a different line.
+ * Picks up to `count` lanes and, for each, who sits just above / below / level
+ * with the player in that lane. Neighbours are chosen at random among the
+ * closest few, so asking again gives a different set.
  */
-export function buildVerdicts(target: BalancePlayer, everyone: BalancePlayer[], pick: Pick, count = 3): string[] {
+export function planVerdicts(target: BalancePlayer, everyone: BalancePlayer[], pick: Pick, count = 3): VerdictFact[] {
   const others = everyone.filter((p) => p.id !== target.id);
   const lanes = [...ROLES].sort(() => (pick([0, 1]) ? 1 : -1));
-  const lines: string[] = [];
+  const facts: VerdictFact[] = [];
   for (const role of lanes) {
-    if (lines.length >= count) break;
-    const lane = LANE[role];
+    if (facts.length >= count) break;
     const mine = roleStrength(target, role);
     if (!Number.isFinite(mine)) {
-      if (pick([true, false])) lines.push(pick([`${eun(lane)} 금지 구역이에요. 🚫 가지 마세요.`, `${lane}? 규pt는 그런 라인을 본 적이 없어요. 🚫`]));
+      if (pick([true, false])) facts.push({ role, kind: "forbidden" });
       continue;
     }
     const field = others.map((p) => ({ name: p.name, s: roleStrength(p, role) })).filter((x) => Number.isFinite(x.s));
     const above = field.filter((x) => x.s > mine + SIMILAR).sort((a, b) => a.s - b.s).slice(0, 3);
     const below = field.filter((x) => x.s < mine - SIMILAR).sort((a, b) => b.s - a.s).slice(0, 3);
     const same = field.filter((x) => Math.abs(x.s - mine) <= SIMILAR);
-    const up = above.length ? pick(above).name : null;
-    const down = below.length ? pick(below).name : null;
-    const sim = same.length ? pick(same).name : null;
-    const options: string[] = [];
-    if (up && down) options.push(
-      `당신의 ${eun(lane)} ${down}보다 낫지만 ${up}보다는 별로예요.`,
-      `${lane}: ${down} < 당신 < ${up}. 딱 중간 어딘가예요.`,
-      `${lane}에서는 ${down} 정도는 이기는데 ${up} 앞에선 작아져요.`,
-    );
-    if (sim) options.push(`${lane} 실력은 ${rang(sim)} 거의 비슷해요. 맞라인 서면 명경기 예약.`, `${lane}에서 ${eun(sim)} 당신의 라이벌이에요. 👀`);
-    if (!up && down) options.push(`${lane}에서는 적수가 없어요… 아마도. 👑`, `${lane}만큼은 당신이 제일 위예요. ${down}도 당신 아래.`);
-    if (up && !down) options.push(`${eun(lane)}… ${up}보다도 아래예요. 힘내요. 🫠`, `${lane}에서는 아직 성장 중이에요. ${up}부터 따라잡아 봐요.`);
-    if (options.length) lines.push(pick(options));
+    const kinds: VerdictFact[] = [];
+    if (above.length && below.length) kinds.push({ role, kind: "between", down: pick(below).name, up: pick(above).name });
+    if (same.length) kinds.push({ role, kind: "similar", sim: pick(same).name });
+    if (!above.length && below.length) kinds.push({ role, kind: "top", down: pick(below).name });
+    if (above.length && !below.length) kinds.push({ role, kind: "bottom", up: pick(above).name });
+    if (kinds.length) facts.push(pick(kinds));
   }
+  return facts;
+}
+
+const josa = (word: string, withBatchim: string, without: string) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0 ? withBatchim : without;
+};
+const eun = (w: string) => w + josa(w, "은", "는");
+
+// Particle pairs (after a final consonant, after a vowel). Longest first.
+const PARTICLES: Array<[string, string]> = [["이랑", "랑"], ["과", "와"], ["은", "는"], ["이", "가"], ["을", "를"], ["아", "야"]];
+
+/** Fixes the particle right after each name, e.g. "동완랑" → "동완이랑", "민수이랑" → "민수랑". */
+export function fixParticles(text: string, names: string[]): string {
+  let out = text;
+  for (const name of names) {
+    for (const [hard, soft] of PARTICLES) {
+      const right = josa(name, hard, soft);
+      for (const wrong of [hard, soft]) {
+        if (wrong === right) continue;
+        // Only when the particle ends the word, so "김하승보다" or "동완이" (name+이) aren't touched wrongly.
+        out = out.replace(new RegExp(`${escape(name)}${wrong}(?=[\\s,.!?~ㅋ)도요만]|$)`, "g"), name + right);
+      }
+    }
+  }
+  return out;
+}
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const rang = (w: string) => w + josa(w, "이랑", "랑");
+
+/** Built-in phrasing; used when no AI is configured or it fails. */
+export function renderTemplate(fact: VerdictFact, pick: Pick): string {
+  const lane = LANE[fact.role];
+  switch (fact.kind) {
+    case "forbidden": return pick([`${eun(lane)} 금지 구역이에요. 🚫 가지 마세요.`, `${lane}? 규pt는 그런 라인을 본 적이 없어요. 🚫`]);
+    case "between": return pick([
+      `당신의 ${eun(lane)} ${fact.down}보다 낫지만 ${fact.up}보다는 별로예요.`,
+      `${lane}: ${fact.down} < 당신 < ${fact.up}. 딱 중간 어딘가예요.`,
+      `${lane}에서는 ${fact.down} 정도는 이기는데 ${fact.up} 앞에선 작아져요.`,
+      `${lane}: ${fact.down}은 이기쥬 나이쨔~ 근데 ${fact.up}한텐 까비요.`,
+    ]);
+    case "similar": return pick([`${lane} 실력은 ${rang(fact.sim)} 거의 비슷해요. 맞라인 서면 명경기 예약.`, `${lane}에서 ${eun(fact.sim)} 당신의 라이벌이에요. 👀`, `${lane}은 ${rang(fact.sim)} 줴줴 동급이야 ㅋㅋ`]);
+    case "top": return pick([`${lane}에서는 적수가 없어요… 아마도. 👑`, `${lane}만큼은 당신이 제일 위예요. ${fact.down}도 당신 아래.`]);
+    case "bottom": return pick([`${eun(lane)}… ${fact.up}보다도 아래예요. 힘내요. 🫠`, `${lane}에서는 아직 성장 중이에요. ${fact.up}부터 따라잡아 봐요.`]);
+  }
+}
+
+/** Number-free comparisons using the built-in phrasing. */
+export function buildVerdicts(target: BalancePlayer, everyone: BalancePlayer[], pick: Pick, count = 3): string[] {
+  const lines = planVerdicts(target, everyone, pick, count).map((fact) => renderTemplate(fact, pick));
   return lines.length ? lines : ["규pt도 아직 당신을 잘 모르겠어요. 🤔"];
 }
