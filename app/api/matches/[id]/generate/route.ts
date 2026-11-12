@@ -10,8 +10,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     await requireAdmin();
     const { id } = await params;
     const supabase = createAdminClient();
-    const { players, rules } = await loadMatchContext(supabase, id);
-    const candidates = generateBalancedTeams(players, rules, { limit: 5 });
+    const { players, rules, matchupGroups } = await loadMatchContext(supabase, id);
+    const candidates = generateBalancedTeams(players, rules, { limit: 5, matchupGroups });
     const votingToken = `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
     await supabase.from("match_candidate_options").delete().eq("match_session_id", id);
     const { error: optionsError } = await supabase.from("match_candidate_options").insert(candidates.slice(0, 3).map((candidate, index) => ({ match_session_id: id, option_index: index + 1, candidate, metrics: candidate.metrics })));

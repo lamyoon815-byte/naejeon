@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toBalancePlayer, type PlayerRow } from "@/lib/data-mappers";
-import type { BalanceCandidate, BalancePlayer, SeparationRule } from "@/lib/domain";
+import type { BalanceCandidate, BalancePlayer, MatchupGroup, SeparationRule } from "@/lib/domain";
 
 export async function loadMatchContext(supabase: SupabaseClient, matchId: string): Promise<{
-  players: BalancePlayer[]; rules: SeparationRule[]; session: { id: string; status: string; created_by: string };
+  players: BalancePlayer[]; rules: SeparationRule[]; matchupGroups: MatchupGroup[]; session: { id: string; status: string; created_by: string };
 }> {
   const { data: session, error: sessionError } = await supabase.from("match_sessions").select("id,status,created_by").eq("id", matchId).maybeSingle();
   if (sessionError) throw sessionError;
@@ -21,7 +21,12 @@ export async function loadMatchContext(supabase: SupabaseClient, matchId: string
   if (rulesError) throw rulesError;
   const idSet = new Set(playerIds);
   const rules = (rulesRows ?? []).filter((row) => idSet.has(row.player_b_id)).map((row) => ({ playerAId: row.player_a_id, playerBId: row.player_b_id }));
-  return { players, rules, session };
+  const { data: groupRows, error: groupError } = await supabase.from("player_matchup_groups").select("group_name,player_id").in("player_id", playerIds);
+  if (groupError) throw groupError;
+  const grouped = new Map<string, string[]>();
+  for (const row of groupRows ?? []) grouped.set(row.group_name, [...(grouped.get(row.group_name) ?? []), row.player_id]);
+  const matchupGroups = [...grouped].map(([name, ids]) => ({ name, playerIds: ids })).filter((group) => group.playerIds.length >= 2);
+  return { players, rules, matchupGroups, session };
 }
 
 export function assignmentSnapshot(candidate: BalanceCandidate, players: BalancePlayer[]) {

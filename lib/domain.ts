@@ -23,6 +23,8 @@ export type BalancePlayer = {
 };
 
 export type SeparationRule = { playerAId: string; playerBId: string };
+/** Players who should face each other in lane whenever two or more of them join a match. */
+export type MatchupGroup = { name: string; playerIds: string[] };
 export type Team = "BLUE" | "RED";
 
 export type PlayerAssignment = {

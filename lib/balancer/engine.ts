@@ -3,12 +3,13 @@ import {
   type BalanceCandidate,
   type BalanceMetrics,
   type BalancePlayer,
+  type MatchupGroup,
   type PlayerAssignment,
   type Role,
   type SeparationRule,
   type Team,
 } from "@/lib/domain";
-import { assertWeights, DEFAULT_SCORING_WEIGHTS, roleStrength, type ScoringWeights } from "./scoring";
+import { assertWeights, DEFAULT_SCORING_WEIGHTS, roleFactor, roleRank, roleStrength, type ScoringWeights } from "./scoring";
 
 export class NoValidAssignmentError extends Error {
   readonly code = "NO_VALID_ASSIGNMENT";
@@ -17,7 +18,13 @@ export class NoValidAssignmentError extends Error {
   }
 }
 
-type EngineOptions = { limit?: number; weights?: ScoringWeights };
+type EngineOptions = { limit?: number; weights?: ScoringWeights; laneGapTolerance?: number; matchupGroups?: MatchupGroup[] };
+
+/**
+ * Lane-gap points within which two lineups count as equally fair. Among those,
+ * the one that puts more players on their stronger roles wins.
+ */
+export const DEFAULT_LANE_GAP_TOLERANCE = 4;
 type Pair = { blueIndex: number; redIndex: number; role: Role; gap: number };
 
 export function generateBalancedTeams(
@@ -42,19 +49,38 @@ export function generateBalancedTeams(
     if (eligibleByRole[role].length < 2) throw new NoValidAssignmentError();
   }
 
-  const results: BalanceCandidate[] = [];
+  // Matchup groups: members should face each other. With k members present,
+  // floor(k/2) in-group lanes are required, so at most k mod 2 members (plus any
+  // relaxation below) may face someone outside the group.
+  const groupOf = new Map<number, number>();
+  const groupSizes: number[] = [];
+  for (const group of options.matchupGroups ?? []) {
+    const members = players.map((p, index) => ({ p, index })).filter(({ p, index }) => group.playerIds.includes(p.id) && !groupOf.has(index));
+    if (members.length < 2) continue;
+    for (const { index } of members) groupOf.set(index, groupSizes.length);
+    groupSizes.push(members.length);
+  }
+  let outsideBudget: number[] = [];
+
+  function spendOutsideBudget(blueIndex: number, redIndex: number, delta: number, undo?: number[]): number[] {
+    if (undo) { for (const g of undo) outsideBudget[g] += delta; return undo; }
+    const gb = groupOf.get(blueIndex), gr = groupOf.get(redIndex);
+    if (gb !== undefined && gb === gr) return [];
+    const touched = [gb, gr].filter((g): g is number => g !== undefined);
+    for (const g of touched) outsideBudget[g] += delta;
+    return touched;
+  }
+
   const used = new Set<number>();
   const blueIds = new Set<string>();
   const redIds = new Set<string>();
   const chosen: Pair[] = [];
 
-  function visit(roleIndex: number, currentMaxGap: number) {
-    if (results.length === limit && currentMaxGap > results[results.length - 1].metrics.maximumLaneGap) return;
-    if (roleIndex === ROLES.length) {
-      const candidate = createCandidate(players, strengths, chosen);
-      insertCandidate(results, candidate, limit);
-      return;
-    }
+  // Walks every valid lineup whose largest lane gap stays within bound().
+  function visit(roleIndex: number, currentMaxGap: number, bound: () => number, onLeaf: () => void) {
+    if (currentMaxGap > bound()) return;
+    if (outsideBudget.some((left) => left < 0)) return;
+    if (roleIndex === ROLES.length) { onLeaf(); return; }
     const role = ROLES[roleIndex];
     const eligible = eligibleByRole[role];
     for (const blueIndex of eligible) {
@@ -70,17 +96,43 @@ export function generateBalancedTeams(
         const gap = round(Math.abs(strengths[blueIndex][role] - strengths[redIndex][role]), 2);
         used.add(blueIndex); used.add(redIndex);
         blueIds.add(bluePlayer.id); redIds.add(redPlayer.id);
+        const spent = spendOutsideBudget(blueIndex, redIndex, -1);
         chosen.push({ blueIndex, redIndex, role, gap });
-        visit(roleIndex + 1, Math.max(currentMaxGap, gap));
-        chosen.pop(); blueIds.delete(bluePlayer.id); redIds.delete(redPlayer.id);
+        visit(roleIndex + 1, Math.max(currentMaxGap, gap), bound, onLeaf);
+        chosen.pop(); spendOutsideBudget(blueIndex, redIndex, 1, spent); blueIds.delete(bluePlayer.id); redIds.delete(redPlayer.id);
         used.delete(blueIndex); used.delete(redIndex);
       }
     }
   }
 
-  visit(0, 0);
-  if (results.length === 0) throw new NoValidAssignmentError();
-  return results;
+  function search(relax: number): BalanceCandidate[] {
+    const fresh = () => groupSizes.map((size) => Math.min(size, size % 2 + 2 * relax));
+    // Pass 1: the smallest achievable largest lane gap.
+    let bestMaxGap = Number.POSITIVE_INFINITY;
+    outsideBudget = fresh();
+    visit(0, 0, () => bestMaxGap, () => {
+      bestMaxGap = Math.min(bestMaxGap, Math.max(...chosen.map((pair) => pair.gap)));
+    });
+    if (!Number.isFinite(bestMaxGap)) return [];
+
+    // Pass 2: among lineups nearly as fair as the best, prefer stronger roles.
+    const tolerance = Math.max(0, options.laneGapTolerance ?? DEFAULT_LANE_GAP_TOLERANCE);
+    const ceiling = round(bestMaxGap + tolerance, 2);
+    const results: BalanceCandidate[] = [];
+    outsideBudget = fresh();
+    visit(0, 0, () => ceiling, () => {
+      insertCandidate(results, createCandidate(players, strengths, chosen, weights), limit);
+    });
+    return results;
+  }
+
+  // If role limits make the full in-group matchups impossible, relax one lane at a time.
+  const maxRelax = Math.max(0, ...groupSizes.map((size) => Math.floor(size / 2)));
+  for (let relax = 0; relax <= maxRelax; relax++) {
+    const results = search(relax);
+    if (results.length > 0) return results;
+  }
+  throw new NoValidAssignmentError();
 }
 
 export function validateManualAssignment(
@@ -128,10 +180,10 @@ export function validateManualAssignment(
   return createCandidate(players, strengths, ROLES.map((role) => {
     const pair = pairs.get(role)! as Pair;
     return { ...pair, gap: round(Math.abs(strengths[pair.blueIndex][role] - strengths[pair.redIndex][role]), 2) };
-  }));
+  }), weights);
 }
 
-function createCandidate(players: BalancePlayer[], strengths: Record<Role, number>[], pairs: Pair[]): BalanceCandidate {
+function createCandidate(players: BalancePlayer[], strengths: Record<Role, number>[], pairs: Pair[], weights: ScoringWeights): BalanceCandidate {
   const blue: PlayerAssignment[] = [];
   const red: PlayerAssignment[] = [];
   const laneGaps = {} as Record<Role, number>;
@@ -142,12 +194,11 @@ function createCandidate(players: BalancePlayer[], strengths: Record<Role, numbe
       const player = players[index];
       const strength = strengths[index][pair.role];
       const proficiency = player.roleSkills[pair.role];
-      const maxProficiency = Math.max(...Object.values(player.roleSkills));
       const assignment: PlayerAssignment = { playerId: player.id, name: player.name, nickname: player.nickname, tagline: player.tagline, team, role: pair.role, roleStrength: strength, roleProficiency: proficiency };
       (team === "BLUE" ? blue : red).push(assignment);
       if (team === "BLUE") blueTotal += strength; else redTotal += strength;
-      satisfaction += maxProficiency > 0 ? proficiency / maxProficiency : 0;
-      if (proficiency === maxProficiency) main += 1;
+      satisfaction += roleFactor(player, pair.role, weights);
+      if (roleRank(player, pair.role) === 1) main += 1;
     }
   }
   const gaps = Object.values(laneGaps);
@@ -170,10 +221,10 @@ function createCandidate(players: BalancePlayer[], strengths: Record<Role, numbe
 }
 
 function compareCandidates(a: BalanceCandidate, b: BalanceCandidate) {
-  return a.metrics.maximumLaneGap - b.metrics.maximumLaneGap ||
+  return b.metrics.roleSatisfaction - a.metrics.roleSatisfaction ||
+    a.metrics.maximumLaneGap - b.metrics.maximumLaneGap ||
     a.metrics.squaredLaneGapSum - b.metrics.squaredLaneGapSum ||
     a.metrics.totalStrengthDifference - b.metrics.totalStrengthDifference ||
-    b.metrics.roleSatisfaction - a.metrics.roleSatisfaction ||
     a.deterministicKey.localeCompare(b.deterministicKey);
 }
 
