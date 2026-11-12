@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { toBalancePlayer, type PlayerRow } from "@/lib/data-mappers";
+import { playerSelect, toBalancePlayer, type PlayerRow } from "@/lib/data-mappers";
 import type { BalanceCandidate, BalancePlayer, MatchupGroup, SeparationRule } from "@/lib/domain";
 
 export async function loadMatchContext(supabase: SupabaseClient, matchId: string): Promise<{
@@ -12,9 +12,9 @@ export async function loadMatchContext(supabase: SupabaseClient, matchId: string
   if (participantsError) throw participantsError;
   const playerIds = (participants ?? []).map((row) => row.player_id);
   if (playerIds.length !== 10) throw new Error("매치 참가자는 정확히 10명이어야 합니다.");
-  const { data: playerRows, error: playerError } = await supabase.from("players").select("*,player_role_skills(*)").in("id", playerIds);
+  const { data: playerRows, error: playerError } = await supabase.from("players").select(playerSelect(true)).in("id", playerIds);
   if (playerError) throw playerError;
-  const byId = new Map(((playerRows ?? []) as PlayerRow[]).map((row) => [row.id, toBalancePlayer(row)]));
+  const byId = new Map(((playerRows ?? []) as unknown as PlayerRow[]).map((row) => [row.id, toBalancePlayer(row)]));
   const players = playerIds.map((id) => byId.get(id)).filter((player): player is BalancePlayer => Boolean(player));
   if (players.length !== 10) throw new Error("일부 참가자 프로필을 불러오지 못했습니다.");
   const { data: rulesRows, error: rulesError } = await supabase.from("player_separation_rules").select("player_a_id,player_b_id").eq("is_active", true).in("player_a_id", playerIds);

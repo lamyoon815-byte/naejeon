@@ -103,6 +103,8 @@ export function roleStrength(
 ): number {
   const factor = roleFactor(player, role, weights);
   if (factor === 0) return Number.NEGATIVE_INFINITY;
+  const override = player.roleOverrides?.[role];
+  if (override !== undefined) return round(override, 2);
   return round(playerBase(player, weights) * factor, 2);
 }
 

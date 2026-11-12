@@ -1,11 +1,17 @@
-import type { BalancePlayer, RankDivision, RankTier, RoleSkills } from "./domain";
+import { ROLES, type BalancePlayer, type RankDivision, type RankTier, type Role, type RoleSkills } from "./domain";
 
 export type PlayerRow = {
   id: string; name: string; nickname: string | null; tagline: string | null; rank_tier: string; rank_division: string | null;
   rank_lp: number | null; custom_skill: number | string; is_active: boolean;
   created_at: string; updated_at: string;
   player_role_skills: { top: number; jungle: number; mid: number; adc: number; support: number } | Array<{ top: number; jungle: number; mid: number; adc: number; support: number }>;
+  player_role_overrides?: Array<{ role: string; strength: number | string }> | null;
 };
+
+/** Select string for player rows; overrides only when the caller may see them. */
+export function playerSelect(withOverrides: boolean): string {
+  return withOverrides ? "*,player_role_skills(*),player_role_overrides(role,strength)" : "*,player_role_skills(*)";
+}
 
 export function toBalancePlayer(row: PlayerRow): BalancePlayer {
   const skills = Array.isArray(row.player_role_skills) ? row.player_role_skills[0] : row.player_role_skills;
@@ -15,6 +21,9 @@ export function toBalancePlayer(row: PlayerRow): BalancePlayer {
     rankDivision: row.rank_division as RankDivision, rankLp: row.rank_lp,
     customSkill: Number(row.custom_skill),
     roleSkills: { TOP: skills.top, JUNGLE: skills.jungle, MID: skills.mid, ADC: skills.adc, SUPPORT: skills.support } satisfies RoleSkills,
+    ...(row.player_role_overrides?.length ? { roleOverrides: Object.fromEntries(
+      row.player_role_overrides.filter((o) => (ROLES as readonly string[]).includes(o.role)).map((o) => [o.role as Role, Number(o.strength)]),
+    ) } : {}),
   };
 }
 

@@ -137,5 +137,11 @@ describe("team balancing engine", () => {
     const oneTrick = player(0, 50, { TOP: 1, JUNGLE: 1, MID: 5, ADC: 1, SUPPORT: 3 });
     expect(roleStrength(oneTrick, "TOP")).toBeLessThanOrEqual(roleStrength(oneTrick, "MID") * 0.8 + 1e-9);
   });
+  it("uses an organizer override for one role but still respects a forbidden role", () => {
+    const p = player(0, 50, { MID: 5, TOP: 0 });
+    p.roleOverrides = { MID: 86, TOP: 99 };
+    expect(roleStrength(p, "MID")).toBe(86);
+    expect(roleStrength(p, "TOP")).toBe(Number.NEGATIVE_INFINITY);
+  });
 });
 

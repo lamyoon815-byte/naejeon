@@ -20,6 +20,8 @@ export type BalancePlayer = {
   rankLp: number | null;
   customSkill: number;
   roleSkills: RoleSkills;
+  /** Organizer-set lane strength that replaces the computed one (admin-only data). */
+  roleOverrides?: Partial<Record<Role, number>>;
 };
 
 export type SeparationRule = { playerAId: string; playerBId: string };
