@@ -121,7 +121,7 @@ export function generateBalancedTeams(
     const results: BalanceCandidate[] = [];
     outsideBudget = fresh();
     visit(0, 0, () => ceiling, () => {
-      insertCandidate(results, createCandidate(players, strengths, chosen, weights), limit);
+      insertCandidate(results, createCandidate(players, strengths, chosen), limit);
     });
     return results;
   }
@@ -180,10 +180,10 @@ export function validateManualAssignment(
   return createCandidate(players, strengths, ROLES.map((role) => {
     const pair = pairs.get(role)! as Pair;
     return { ...pair, gap: round(Math.abs(strengths[pair.blueIndex][role] - strengths[pair.redIndex][role]), 2) };
-  }), weights);
+  }));
 }
 
-function createCandidate(players: BalancePlayer[], strengths: Record<Role, number>[], pairs: Pair[], weights: ScoringWeights): BalanceCandidate {
+function createCandidate(players: BalancePlayer[], strengths: Record<Role, number>[], pairs: Pair[]): BalanceCandidate {
   const blue: PlayerAssignment[] = [];
   const red: PlayerAssignment[] = [];
   const laneGaps = {} as Record<Role, number>;
@@ -197,7 +197,7 @@ function createCandidate(players: BalancePlayer[], strengths: Record<Role, numbe
       const assignment: PlayerAssignment = { playerId: player.id, name: player.name, nickname: player.nickname, tagline: player.tagline, team, role: pair.role, roleStrength: strength, roleProficiency: proficiency };
       (team === "BLUE" ? blue : red).push(assignment);
       if (team === "BLUE") blueTotal += strength; else redTotal += strength;
-      satisfaction += roleFactor(player, pair.role, weights);
+      satisfaction += roleFactor(player, pair.role);
       if (roleRank(player, pair.role) === 1) main += 1;
     }
   }

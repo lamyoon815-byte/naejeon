@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LANE_GAP_TOLERANCE, generateBalancedTeams, NoValidAssignmentError, validateManualAssignment } from "./engine";
 import type { BalancePlayer, RoleSkills, SeparationRule } from "@/lib/domain";
-import { normalizedRank, roleStrength } from "./scoring";
+import { normalizedRank, roleStrength, TIER_STEP } from "./scoring";
 
 const roles = ["TOP", "JUNGLE", "MID", "ADC", "SUPPORT"] as const;
 function player(index: number, skill = 70, overrides: Partial<RoleSkills> = {}): BalancePlayer {
@@ -125,18 +125,21 @@ describe("team balancing engine", () => {
     players[1].roleSkills = { TOP: 0, JUNGLE: 5, MID: 0, ADC: 0, SUPPORT: 0 };
     expect(generateBalancedTeams(players, [], { matchupGroups: [{ name: "g", playerIds: [players[0].id, players[1].id] }] })).not.toHaveLength(0);
   });
-  it("ranks a higher-LP Master above a lower one on their second-best role, however the rater scaled it", () => {
-    const harsh = player(0); harsh.rankTier = "MASTER"; harsh.rankDivision = null; harsh.rankLp = 200;
-    harsh.roleSkills = { TOP: 2, JUNGLE: 5, MID: 0, ADC: 2, SUPPORT: 2 };
-    const generous = player(1); generous.rankTier = "MASTER"; generous.rankDivision = null; generous.rankLp = 0;
-    generous.roleSkills = { TOP: 4, JUNGLE: 2, MID: 5, ADC: 3, SUPPORT: 3 };
-    expect(roleStrength(harsh, "TOP")).toBeGreaterThan(roleStrength(generous, "TOP"));
+  it("ranks a higher-LP Master above a lower one on a secondary lane", () => {
+    const higher = player(0); higher.rankTier = "MASTER"; higher.rankDivision = null; higher.rankLp = 200;
+    higher.roleSkills = { TOP: 4, JUNGLE: 5, MID: 0, ADC: 2, SUPPORT: 2 };
+    const lower = player(1); lower.rankTier = "MASTER"; lower.rankDivision = null; lower.rankLp = 0;
+    lower.roleSkills = { TOP: 4, JUNGLE: 2, MID: 5, ADC: 2, SUPPORT: 2 };
+    expect(roleStrength(higher, "TOP")).toBeGreaterThan(roleStrength(lower, "TOP"));
   });
 
-  it("caps a barely-played role (proficiency 1) even when it ranks high", () => {
-    const oneTrick = player(0, 50, { TOP: 1, JUNGLE: 1, MID: 5, ADC: 1, SUPPORT: 3 });
-    expect(roleStrength(oneTrick, "TOP")).toBeLessThanOrEqual(roleStrength(oneTrick, "MID") * 0.8 + 1e-9);
+  it("plays exactly one tier lower outside main and secondary lanes", () => {
+    const p = player(0, 50, { TOP: 1, JUNGLE: 2, MID: 5, ADC: 3, SUPPORT: 4 });
+    expect(roleStrength(p, "SUPPORT")).toBe(roleStrength(p, "MID"));
+    for (const role of ["TOP", "JUNGLE", "ADC"] as const) expect(roleStrength(p, "MID") - roleStrength(p, role)).toBe(TIER_STEP);
+    expect(normalizedRank("EMERALD", "IV", 0) - normalizedRank("PLATINUM", "IV", 0)).toBe(TIER_STEP);
   });
+
   it("uses an organizer override for one role but still respects a forbidden role", () => {
     const p = player(0, 50, { MID: 5, TOP: 0 });
     p.roleOverrides = { MID: 86, TOP: 99 };

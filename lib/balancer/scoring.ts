@@ -1,58 +1,50 @@
 import type { BalancePlayer, RankDivision, RankTier, Role } from "@/lib/domain";
 
 /**
- * Lane strength = player base × role factor.
+ * Lane strength = tier score, minus one tier on lanes outside a player's main
+ * and secondary positions.
  *
- * Role proficiency (0–5) only says how a player's own roles rank against each
- * other; how generous the rater was must not leak into cross-player scores.
- * So the factor comes from the role's *rank* within the player (ties share a
- * rank), not from the proficiency value itself:
- *
- * - base: normalized rank, shifted by custom skill (50 = neutral, ±customSkillSpread)
- * - rankFactor[k]: multiplier for the player's (k+1)-th best role
- * - weakRoleFactor: ceiling for proficiency 1 ("barely plays it", raw ≤ 20)
+ * Role proficiency (0–5) only classifies the player's own lanes:
+ * - 5 = main (주포), 4 = secondary (부포). An all-liner has every lane at 4–5.
+ * - 1–3 = other lanes: played one tier lower (−offRolePenalty).
+ * - 0 = forbidden.
+ * Custom skill shifts the whole player by up to ±customSkillSpread (50 = neutral).
  */
 export const DEFAULT_SCORING_WEIGHTS = Object.freeze({
-  model: "tier-x-role-rank-v3" as const,
-  customSkillSpread: 10,
-  rankFactor: Object.freeze([1, 0.95, 0.9, 0.85, 0.8] as const),
-  weakRoleFactor: 0.8,
+  model: "tier-step-v4" as const,
+  customSkillSpread: 5,
+  offRolePenalty: 15,
 });
 
 export type ScoringWeights = {
-  readonly model: "tier-x-role-rank-v3";
+  readonly model: "tier-step-v4";
   readonly customSkillSpread: number;
-  readonly rankFactor: readonly number[];
-  readonly weakRoleFactor: number;
+  readonly offRolePenalty: number;
 };
 
-// Division IV value of each tier, and the step per division above it.
-// The steps widen toward the top of the ladder, where each division is a
-// bigger jump in skill. Master/GM/Challenger keep the organizer's fixed values.
+/** Points per tier; divisions split it evenly (IV → I = 3 steps). */
+export const TIER_STEP = 15;
+
+// Division IV value of each tier. Master/GM/Challenger keep the organizer's fixed values.
 const TIER_BASE: Record<RankTier, number> = {
   UNRANKED: 20,
-  IRON: 20,
-  BRONZE: 28,
-  SILVER: 36,
-  GOLD: 45,
-  PLATINUM: 54,
-  EMERALD: 63,
+  IRON: 0,
+  BRONZE: 0,
+  SILVER: 15,
+  GOLD: 30,
+  PLATINUM: 45,
+  EMERALD: 60,
   DIAMOND: 75,
   MASTER: 90,
   GRANDMASTER: 100,
   CHALLENGER: 100,
 };
 
-const DIVISION_STEP: Record<RankTier, number> = {
-  UNRANKED: 0, IRON: 2, BRONZE: 2, SILVER: 2, GOLD: 2.5, PLATINUM: 2.5,
-  EMERALD: 3, DIAMOND: 3.5, MASTER: 0, GRANDMASTER: 0, CHALLENGER: 0,
-};
-
 const DIVISION_INDEX: Record<Exclude<RankDivision, null>, number> = { IV: 0, III: 1, II: 2, I: 3 };
 
 /**
- * Deterministic 0–100 mapping. Standard tiers keep a small within-division
- * adjustment. Master uses explicit 200-LP brackets requested by the organizer.
+ * Deterministic 0–100 mapping: 15 points per tier, 3.75 per division.
+ * Master uses explicit 200-LP brackets requested by the organizer.
  * These values are configurable heuristics, not win probabilities.
  */
 export function normalizedRank(
@@ -64,7 +56,7 @@ export function normalizedRank(
   const safeLp = Math.max(0, lp ?? 0);
   if (tier === "MASTER") return clamp(TIER_BASE.MASTER + Math.floor(safeLp / 200) * 5, 0, 100);
   if (["GRANDMASTER", "CHALLENGER"].includes(tier)) return TIER_BASE[tier];
-  const divisionBonus = division ? DIVISION_INDEX[division] * DIVISION_STEP[tier] : 0;
+  const divisionBonus = division ? DIVISION_INDEX[division] * (TIER_STEP / 4) : 0;
   return clamp(TIER_BASE[tier] + divisionBonus, 0, 100);
 }
 
@@ -76,6 +68,11 @@ export function playerBase(
   return normalizedRank(player.rankTier, player.rankDivision, player.rankLp) + custom * weights.customSkillSpread;
 }
 
+/** True for main (5) and secondary (4) lanes, which play at full tier. */
+export function isMainOrSecondary(player: BalancePlayer, role: Role): boolean {
+  return player.roleSkills[role] >= 4;
+}
+
 /** 1-based rank of a role among the player's playable roles; equal proficiency shares a rank. */
 export function roleRank(player: BalancePlayer, role: Role): number {
   const proficiency = player.roleSkills[role];
@@ -83,17 +80,11 @@ export function roleRank(player: BalancePlayer, role: Role): number {
   return higher.size + 1;
 }
 
-/** Multiplier applied to the player's base for this role; 0 when the role is forbidden. */
-export function roleFactor(
-  player: BalancePlayer,
-  role: Role,
-  weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS,
-): number {
+/** How happy the player is on this lane (used only to break near-ties): main 1, secondary 0.95, other 0.8, forbidden 0. */
+export function roleFactor(player: BalancePlayer, role: Role): number {
   const proficiency = player.roleSkills[role];
   if (proficiency === 0) return 0;
-  const factors = weights.rankFactor;
-  const byRank = factors[Math.min(roleRank(player, role), factors.length) - 1];
-  return proficiency === 1 ? Math.min(byRank, weights.weakRoleFactor) : byRank;
+  return proficiency >= 5 ? 1 : proficiency === 4 ? 0.95 : 0.8;
 }
 
 export function roleStrength(
@@ -101,19 +92,16 @@ export function roleStrength(
   role: Role,
   weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS,
 ): number {
-  const factor = roleFactor(player, role, weights);
-  if (factor === 0) return Number.NEGATIVE_INFINITY;
+  if (player.roleSkills[role] === 0) return Number.NEGATIVE_INFINITY;
   const override = player.roleOverrides?.[role];
   if (override !== undefined) return round(override, 2);
-  return round(playerBase(player, weights) * factor, 2);
+  const penalty = isMainOrSecondary(player, role) ? 0 : weights.offRolePenalty;
+  return round(playerBase(player, weights) - penalty, 2);
 }
 
 export function assertWeights(weights: ScoringWeights): void {
-  const f = weights.rankFactor;
-  const decreasing = f.length > 0 && f[0] <= 1 && f.every((v, i) => v > 0 && (i === 0 || v <= f[i - 1]));
-  const weakOk = weights.weakRoleFactor > 0 && weights.weakRoleFactor <= 1;
-  if (!decreasing || !weakOk || weights.customSkillSpread < 0) {
-    throw new Error("라인 배율은 1순위부터 작아지는 0~1 사이 값이어야 합니다.");
+  if (weights.customSkillSpread < 0 || weights.offRolePenalty < 0) {
+    throw new Error("커스텀 보정 폭과 부라인 감점은 0 이상이어야 합니다.");
   }
 }
 
