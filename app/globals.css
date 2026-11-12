@@ -127,3 +127,11 @@ h1,h2,h3,.step,.eyebrow,.brand,.counter b,.team header span,.versus>b,.loading-b
 .guestbook-notes li>div button{margin-left:auto;border:1px solid var(--ink);background:#fff;padding:3px 9px;font-size:11px;cursor:pointer}
 @media(max-width:620px){.guestbook-form{padding:16px 14px}.guestbook-form input{max-width:none}.guestbook-form-foot .pixel-btn{width:100%}.note-count{margin-left:0}}
 .admin-login{border:2px solid var(--ink);background:#fff;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;box-shadow:2px 2px 0 var(--ink);white-space:nowrap}
+.verdict-panel{padding:24px}
+.verdict-ask{display:flex;gap:12px;flex-wrap:wrap}.verdict-ask select{flex:1;min-width:180px;height:45px;border:2px solid var(--ink);padding:0 12px;font-size:14px;background:#fffafd}
+.verdict-result{display:flex;gap:18px;align-items:flex-start;margin-top:24px;padding-top:22px;border-top:2px dashed #eadce3}
+.verdict-result .poro{width:110px;height:104px;flex:none;animation:thinking 1.6s ease-in-out infinite}
+.verdict-result h2{margin:8px 0 12px;font-size:22px}
+.verdict-result ul{margin:0;padding:0;list-style:none;display:grid;gap:10px}
+.verdict-result li{background:var(--pale);border:2px solid var(--ink);padding:12px 14px;font-size:14px;line-height:1.6;box-shadow:3px 3px 0 var(--ink)}
+@media(max-width:620px){.verdict-panel{padding:18px 14px}.verdict-ask .pixel-btn{width:100%}.verdict-result{flex-direction:column;align-items:center}.verdict-result .poro{width:90px;height:85px}}

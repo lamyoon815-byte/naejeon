@@ -8,7 +8,7 @@ import { ROLES, type BalanceCandidate, type PlayerAssignment, type RankDivision,
 import { assessBalance, type BalanceAssessment } from "@/lib/balancer/assessment";
 import { normalizedRank, roleStrength } from "@/lib/balancer/scoring";
 
-type Screen = "select" | "register" | "balance" | "result" | "feedback" | "guestbook" | "admin";
+type Screen = "select" | "register" | "balance" | "result" | "verdict" | "feedback" | "guestbook" | "admin";
 type Player = {
   id: string; name: string; nickname: string | null; tagline: string | null; rankTier: RankTier; rankDivision: RankDivision; rankLp: number | null;
   customSkill: number; roleSkills: RoleSkills; isActive: boolean; createdAt: string; updatedAt: string;
@@ -19,7 +19,7 @@ const roleIcon: Record<Role, string> = { TOP: "♜", JUNGLE: "♣", MID: "◆", 
 const roleLabel: Record<Role, string> = { TOP: "TOP", JUNGLE: "JUNG", MID: "MID", ADC: "ADC", SUPPORT: "SUP" };
 const riotId = (nickname: string | null, tagline: string | null) => nickname ? `${nickname}${tagline ? ` #${tagline}` : ""}` : "";
 const navItems: { key: Screen; label: string }[] = [
-  { key: "select", label: "플레이어 선택" }, { key: "result", label: "최근 경기" }, { key: "feedback", label: "피드백" }, { key: "guestbook", label: "방명록" }, { key: "admin", label: "관리자" },
+  { key: "select", label: "플레이어 선택" }, { key: "result", label: "최근 경기" }, { key: "verdict", label: "내 점수" }, { key: "feedback", label: "피드백" }, { key: "guestbook", label: "방명록" }, { key: "admin", label: "관리자" },
 ];
 
 function Poro({ pose = "hero", className = "" }: { pose?: "hero" | "think" | "cheer" | "icon"; className?: string }) {
@@ -105,6 +105,7 @@ export default function Home() {
     {screen === "balance" && <section className="screen loading-screen"><div className="loading-box"><span className="step">MATCH MAKING</span><Poro pose="think" className={balancing ? "thinking" : ""} /><h1>최고의 조합을<br />찾고 있어요!</h1><p>티어 · 포지션 · 숙련도 · 비공개 조건을 서버에서 계산 중...</p><div className="pixel-loader">{Array.from({ length: 8 }).map((_, index) => <i key={index} />)}</div><small>CALCULATING BALANCE...</small></div></section>}
     {screen === "result" && candidates[candidateIndex] && <ResultScreen key={candidates[candidateIndex].deterministicKey} candidate={candidates[candidateIndex]} alternativeCount={candidates.length} candidateIndex={candidateIndex} votingPath={votingPath} matchId={matchId} notify={notify} onBack={() => setScreen("select")} onNext={() => setCandidateIndex((candidateIndex + 1) % candidates.length)} onConfirm={confirm} />}
     {screen === "feedback" && <section className="screen compact-screen"><FeedbackBox matchId={null} notify={notify} board admin={isAdmin} /></section>}
+    {screen === "verdict" && <VerdictScreen players={players} notify={notify} />}
     {screen === "guestbook" && <Guestbook notify={notify} admin={isAdmin} />}
     {screen === "admin" && isAdmin && <AdminScreen players={players} onBack={() => setScreen("select")} onArchived={(id) => { setPlayers((previous) => previous.filter((player) => player.id !== id)); setSelected((previous) => previous.filter((value) => value !== id)); }} notify={notify} />}
     {toast && <div className="toast"><Poro pose="icon" /><span>{toast}</span></div>}
@@ -116,6 +117,37 @@ function RegistrationScreen({ onCancel, onSaved }: { onCancel: () => void; onSav
   const usesDivision = !["UNRANKED", "MASTER", "GRANDMASTER", "CHALLENGER"].includes(rankTier);
   async function submit(event: FormEvent) { event.preventDefault(); setSaving(true); setError(""); try { const player = await api<Player>("/api/players", { method: "POST", body: JSON.stringify({ name, nickname: nickname || null, tagline: tagline || null, rankTier, rankDivision: usesDivision ? rankDivision : null, rankLp: rankTier === "UNRANKED" ? null : 0, customSkill, roleSkills: skills }) }); onSaved(player); } catch (reason) { setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); } finally { setSaving(false); } }
   return <section className="screen compact-screen"><div className="page-title"><span className="step">NEW CHALLENGER</span><h1>새 플레이어 등록</h1><p>사람 이름을 기준으로 관리하고 Riot ID는 보조 정보로 표시합니다.</p></div><div className="form-layout"><form className="arcade-panel form-card" onSubmit={submit}><div className="identity-fields"><label>사람 이름<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="이름을 입력해주세요" /></label><label>소환사 닉네임 <small>(선택)</small><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="게임 이름" /></label><label>태그 <small>(선택)</small><span className="tag-input"><i>#</i><input value={tagline} onChange={(event) => setTagline(event.target.value.replace(/^#+/, ""))} placeholder="KR1" /></span></label></div><div className="two-col"><label>솔로 랭크<select value={rankTier} onChange={(event) => setRankTier(event.target.value as RankTier)}>{["UNRANKED","IRON","BRONZE","SILVER","GOLD","PLATINUM","EMERALD","DIAMOND","MASTER","GRANDMASTER","CHALLENGER"].map((tier) => <option key={tier}>{tier}</option>)}</select></label>{usesDivision && <label>디비전<select value={rankDivision} onChange={(event) => setRankDivision(event.target.value)}>{["IV","III","II","I"].map((division) => <option key={division}>{division}</option>)}</select></label>}<label>커스텀 레이팅<input type="number" min="0" max="100" value={customSkill} onChange={(event) => setCustomSkill(Number(event.target.value))} /></label></div><div className="role-ratings"><h3>포지션별 숙련도 <span>0 — 5 · 0은 절대 배정 금지</span></h3>{ROLES.map((role) => <label key={role}><b>{roleIcon[role]} {roleLabel[role]}</b><input type="range" min="0" max="5" value={skills[role]} onChange={(event) => setSkills({ ...skills, [role]: Number(event.target.value) })} /><output>{skills[role]}</output></label>)}</div>{error && <p className="form-error">{error}</p>}<div className="form-actions"><PixelButton variant="white" onClick={onCancel}>취소</PixelButton><PixelButton type="submit" disabled={saving}><Plus size={18} /> {saving ? "저장 중..." : "등록하기"}</PixelButton></div></form><aside className="mascot-tip"><Poro pose="think" /><div><b>TIP!</b><p>숙련도 0인 포지션에는 어떤 경우에도 배정되지 않습니다.</p></div></aside></div></section>;
+}
+
+function VerdictScreen({ players, notify }: { players: Player[]; notify: (message: string) => void }) {
+  const [playerId, setPlayerId] = useState(() => { try { return localStorage.getItem("verdict-player") ?? ""; } catch { return ""; } });
+  const [result, setResult] = useState<{ name: string; verdicts: string[] } | null>(null);
+  const [asking, setAsking] = useState(false);
+  async function ask() {
+    if (!playerId) return;
+    setAsking(true);
+    try {
+      setResult(await api<{ name: string; verdicts: string[] }>(`/api/players/${playerId}/verdict`));
+      try { localStorage.setItem("verdict-player", playerId); } catch { /* storage unavailable */ }
+    } catch (error) { notify(error instanceof Error ? error.message : "규pt가 대답하지 않아요."); }
+    finally { setAsking(false); }
+  }
+  return <section className="screen compact-screen verdict-screen">
+    <div className="page-title"><span className="step">GYU-PT ORACLE</span><h1>내 점수 보기</h1><p>숫자는 비밀! 규pt가 다른 사람과 비교해서 알려 줘요. 물어볼 때마다 대답이 달라져요.</p></div>
+    <div className="arcade-panel verdict-panel">
+      <div className="verdict-ask">
+        <select value={playerId} onChange={(event) => { setPlayerId(event.target.value); setResult(null); }} aria-label="나는 누구?">
+          <option value="">나는 누구?</option>
+          {players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+        </select>
+        <PixelButton onClick={() => void ask()} disabled={!playerId || asking}>{asking ? "규pt 생각 중..." : result ? "🔮 다시 물어보기" : "🔮 규pt에게 물어보기"}</PixelButton>
+      </div>
+      {result && <div className="verdict-result" aria-live="polite">
+        <Poro pose="think" />
+        <div><span className="step">규pt의 판단</span><h2>{result.name}님은요…</h2><ul>{result.verdicts.map((line) => <li key={line}>{line}</li>)}</ul></div>
+      </div>}
+    </div>
+  </section>;
 }
 
 type GuestbookEntry = { id: string; authorName: string; body: string; color: number; createdAt: string };
