@@ -40,3 +40,9 @@ export const createMatchSchema = z.object({ playerIds: z.array(z.string().uuid()
 export const assignmentSchema = z.object({ playerId: z.string().uuid(), team: z.enum(["BLUE", "RED"]), role: z.enum(ROLES) });
 export const confirmAssignmentSchema = z.object({ assignments: z.array(assignmentSchema).length(10), publish: z.boolean().optional().default(false) });
 
+
+export const feedbackInputSchema = z.object({
+  matchId: z.string().uuid().nullable().optional().default(null),
+  authorName: z.string().trim().max(20).nullable().optional().transform((value) => value ? value : null),
+  body: z.string().trim().min(1, "내용을 입력해 주세요.").max(500, "500자까지 쓸 수 있어요."),
+});
