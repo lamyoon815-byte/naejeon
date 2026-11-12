@@ -33,7 +33,7 @@ function PixelButton({ children, onClick, disabled, variant = "pink", className 
 
 function RankBadge({ player }: { player: Player }) {
   const code = player.rankTier === "UNRANKED" ? "UR" : `${player.rankTier[0]}${player.rankDivision ?? ""}`;
-  return <span className={`rank rank-${player.rankTier[0].toLowerCase()}`}>{code}</span>;
+  return <span className={`rank rank-${player.rankTier.toLowerCase()}`}>{code}</span>;
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
