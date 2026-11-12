@@ -1,15 +1,16 @@
 import { apiError, apiOk, handleApiError } from "@/lib/api-response";
-import { requireAdmin } from "@/lib/auth";
+import { getViewer, requireAdmin } from "@/lib/auth";
 import { toPlayerResponse, toPlayerColumns, toRoleSkillColumns, type PlayerRow } from "@/lib/data-mappers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { playerInputSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    // Anyone may list active players; archived ones stay admin-only.
+    const { isAdmin } = await getViewer();
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("q")?.trim();
-    const includeArchived = searchParams.get("includeArchived") === "true";
+    const includeArchived = isAdmin && searchParams.get("includeArchived") === "true";
     let builder = createAdminClient().from("players").select("*,player_role_skills(*)").order("name");
     if (!includeArchived) builder = builder.eq("is_active", true);
     if (query) {

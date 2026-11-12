@@ -1,5 +1,4 @@
 import { apiError, apiOk, handleApiError } from "@/lib/api-response";
-import { requireAdmin } from "@/lib/auth";
 import { generateBalancedTeams, NoValidAssignmentError } from "@/lib/balancer/engine";
 import { DEFAULT_SCORING_WEIGHTS } from "@/lib/balancer/scoring";
 import { loadMatchContext, MatchNotFoundError } from "@/lib/services/matches";
@@ -7,7 +6,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAdmin();
     const { id } = await params;
     const supabase = createAdminClient();
     const { players, rules, matchupGroups } = await loadMatchContext(supabase, id);

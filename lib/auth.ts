@@ -11,3 +11,12 @@ export async function requireAdmin() {
   return user;
 }
 
+
+/** Who is calling, without failing: anonymous visitors get { user: null, isAdmin: false }. */
+export async function getViewer() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { user: null, isAdmin: false };
+  const { data: admin } = await supabase.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle();
+  return { user, isAdmin: Boolean(admin) };
+}
