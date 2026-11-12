@@ -76,21 +76,21 @@ const rang = (w: string) => w + josa(w, "이랑", "랑");
 export function renderTemplate(fact: VerdictFact, pick: Pick): string {
   const lane = LANE[fact.role];
   switch (fact.kind) {
-    case "forbidden": return pick([`${eun(lane)} 금지 구역이에요. 🚫 가지 마세요.`, `${lane}? 규pt는 그런 라인을 본 적이 없어요. 🚫`]);
+    case "forbidden": return pick([`${eun(lane)} 금지 구역이에요. 가지 마세요.`, `${lane}? 엄 예? 그 라인은 안 가는 걸로.`]);
     case "between": return pick([
       `당신의 ${eun(lane)} ${fact.down}보다 낫지만 ${fact.up}보다는 별로예요.`,
       `${lane}: ${fact.down} < 당신 < ${fact.up}. 딱 중간 어딘가예요.`,
       `${lane}에서는 ${fact.down} 정도는 이기는데 ${fact.up} 앞에선 작아져요.`,
-      `${lane}: ${fact.down}은 이기쥬 나이쨔~ 근데 ${fact.up}한텐 까비요.`,
+      `${lane}은 ${fact.down}보다 위, 나이쨔. 근데 ${fact.up}한텐 까비요.`,
     ]);
-    case "similar": return pick([`${lane} 실력은 ${rang(fact.sim)} 거의 비슷해요. 맞라인 서면 명경기 예약.`, `${lane}에서 ${eun(fact.sim)} 당신의 라이벌이에요. 👀`, `${lane}은 ${rang(fact.sim)} 줴줴 동급이야 ㅋㅋ`]);
-    case "top": return pick([`${lane}에서는 적수가 없어요… 아마도. 👑`, `${lane}만큼은 당신이 제일 위예요. ${fact.down}도 당신 아래.`]);
-    case "bottom": return pick([`${eun(lane)}… ${fact.up}보다도 아래예요. 힘내요. 🫠`, `${lane}에서는 아직 성장 중이에요. ${fact.up}부터 따라잡아 봐요.`]);
+    case "similar": return pick([`${lane} 실력은 ${rang(fact.sim)} 거의 비슷해요. 맞라인 서면 명경기 예약.`, `${lane}에서 ${eun(fact.sim)} 당신의 라이벌이에요.`, `${lane}은 ${rang(fact.sim)} 동급. 줴줴이야.`]);
+    case "top": return pick([`${lane}에서는 적수가 없어요. 아마도.`, `${lane}만큼은 당신이 제일 위예요. ${fact.down}도 당신 아래. 줴줴이야.`]);
+    case "bottom": return pick([`${eun(lane)} ${fact.up}보다도 아래예요. 힘내요.`, `${lane}에서는 아직 성장 중이에요. ${fact.up}부터 따라잡아 봐요.`]);
   }
 }
 
 /** Number-free comparisons using the built-in phrasing. */
 export function buildVerdicts(target: BalancePlayer, everyone: BalancePlayer[], pick: Pick, count = 3): string[] {
   const lines = planVerdicts(target, everyone, pick, count).map((fact) => renderTemplate(fact, pick));
-  return lines.length ? lines : ["규pt도 아직 당신을 잘 모르겠어요. 🤔"];
+  return lines.length ? lines : ["규pt도 아직 당신을 잘 모르겠어요."];
 }

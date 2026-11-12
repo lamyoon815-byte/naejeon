@@ -1,13 +1,16 @@
 import "server-only";
 import { fixParticles, LANE, type VerdictFact } from "./verdict";
 
+// Expressions and emoji the organizer doesn't want; any hit falls back to templates.
+const BANNED = /ㅋ|쥬|실화|개꿀|꿀리|폼 ?미쳤|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+
 const SYSTEM = [
-  "너는 롤 내전 팀 밸런서의 마스코트 '규pt'야. 친구끼리 놀리듯 장난스러운 말투로, 한 선수의 라인 실력을 다른 사람과 비교해 한 줄씩 말해.",
+  "너는 롤 내전 팀 밸런서의 마스코트 '규pt'야. 담백하고 살짝 장난스러운 말투로, 한 선수의 라인 실력을 다른 사람과 비교해 한 줄씩 말해.",
   "규칙: 1) 사실마다 정확히 한 줄, 같은 순서로. 2) 사실에 나온 기호([A] 같은)를 반드시 그대로 넣고, 다른 이름은 지어내지 마.",
-  "3) 숫자·점수·티어 이름은 쓰지 마. 4) 한 줄은 60자 이내, 이모지는 최대 1개. 5) 사실의 위아래 관계를 절대 뒤집지 마. 6) 욕설·비하 금지.",
-  // House slang requested by the organizer; sprinkle it in, don't force every word into every line.
-  "말투: 게임 친구들끼리 쓰는 장난스러운 인터넷 말투를 자연스럽게 섞어. 예: '줴줴이야'(그렇지/맞아), '나이쨔'(나이스), '까비요'(아깝다),",
-  "'ㅋㅋ', '~하쥬', '실화냐', '개꿀', '에바임'. 한 줄에 이런 표현 0~2개, 매번 다르게 골라.",
+  "3) 숫자·점수·티어 이름은 쓰지 마. 4) 한 줄은 50자 이내. 5) 사실의 위아래 관계를 절대 뒤집지 마. 6) 욕설·비하 금지.",
+  "7) 이모지·이모티콘, 'ㅋㅋ', '~쥬', '실화냐', '개꿀', '꿀리', '폼 미쳤' 같은 표현은 절대 쓰지 마.",
+  // House expressions requested by the organizer.
+  "말투: 이 표현들만 가끔 섞어. '줴줴이야'(그렇지/인정), '엄 예?'(어 그래?/놀람), '나이쨔'(나이스), '까비요'(아깝다). 한 줄에 최대 1개, 세 줄 중 1~2줄에만.",
 ].join(" ");
 
 /**
@@ -62,7 +65,7 @@ export async function phraseWithGemini(facts: VerdictFact[]): Promise<string[] |
       if (typeof item !== "string") return null;
       const line = item.trim();
       // Reject anything that could mislead: numbers, missing or invented tokens, overly long lines.
-      if (!line || line.length > 90 || /\d/.test(line)) return null;
+      if (!line || line.length > 80 || /\d/.test(line) || BANNED.test(line)) return null;
       if (!needs[index].every((t) => line.includes(t))) return null;
       const used = line.match(/\[[A-Z]\]/g) ?? [];
       if (used.some((t) => !allTokens.includes(t) || !needs[index].includes(t))) return null;
