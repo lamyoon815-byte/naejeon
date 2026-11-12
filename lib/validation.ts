@@ -51,3 +51,9 @@ export const feedbackInputSchema = z.object({
     red: z.string().trim().min(1).max(30),
   })).max(5).nullable().optional().default(null),
 });
+
+export const guestbookInputSchema = z.object({
+  authorName: z.string().trim().min(1, "이름을 입력해 주세요.").max(20, "이름은 20자까지예요."),
+  body: z.string().trim().min(1, "내용을 입력해 주세요.").max(300, "300자까지 쓸 수 있어요."),
+  color: z.number().int().min(0).max(4).optional().default(0),
+});

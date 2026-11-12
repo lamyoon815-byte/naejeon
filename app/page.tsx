@@ -8,7 +8,7 @@ import { ROLES, type BalanceCandidate, type PlayerAssignment, type RankDivision,
 import { assessBalance, type BalanceAssessment } from "@/lib/balancer/assessment";
 import { normalizedRank, roleStrength } from "@/lib/balancer/scoring";
 
-type Screen = "select" | "register" | "balance" | "result" | "feedback" | "admin";
+type Screen = "select" | "register" | "balance" | "result" | "feedback" | "guestbook" | "admin";
 type Player = {
   id: string; name: string; nickname: string | null; tagline: string | null; rankTier: RankTier; rankDivision: RankDivision; rankLp: number | null;
   customSkill: number; roleSkills: RoleSkills; isActive: boolean; createdAt: string; updatedAt: string;
@@ -19,7 +19,7 @@ const roleIcon: Record<Role, string> = { TOP: "♜", JUNGLE: "♣", MID: "◆", 
 const roleLabel: Record<Role, string> = { TOP: "TOP", JUNGLE: "JUNG", MID: "MID", ADC: "ADC", SUPPORT: "SUP" };
 const riotId = (nickname: string | null, tagline: string | null) => nickname ? `${nickname}${tagline ? ` #${tagline}` : ""}` : "";
 const navItems: { key: Screen; label: string }[] = [
-  { key: "select", label: "플레이어 선택" }, { key: "result", label: "최근 경기" }, { key: "feedback", label: "피드백" }, { key: "admin", label: "관리자" },
+  { key: "select", label: "플레이어 선택" }, { key: "result", label: "최근 경기" }, { key: "feedback", label: "피드백" }, { key: "guestbook", label: "방명록" }, { key: "admin", label: "관리자" },
 ];
 
 function Poro({ pose = "hero", className = "" }: { pose?: "hero" | "think" | "cheer" | "icon"; className?: string }) {
@@ -105,6 +105,7 @@ export default function Home() {
     {screen === "balance" && <section className="screen loading-screen"><div className="loading-box"><span className="step">MATCH MAKING</span><Poro pose="think" className={balancing ? "thinking" : ""} /><h1>최고의 조합을<br />찾고 있어요!</h1><p>티어 · 포지션 · 숙련도 · 비공개 조건을 서버에서 계산 중...</p><div className="pixel-loader">{Array.from({ length: 8 }).map((_, index) => <i key={index} />)}</div><small>CALCULATING BALANCE...</small></div></section>}
     {screen === "result" && candidates[candidateIndex] && <ResultScreen key={candidates[candidateIndex].deterministicKey} candidate={candidates[candidateIndex]} alternativeCount={candidates.length} candidateIndex={candidateIndex} votingPath={votingPath} matchId={matchId} notify={notify} onBack={() => setScreen("select")} onNext={() => setCandidateIndex((candidateIndex + 1) % candidates.length)} onConfirm={confirm} />}
     {screen === "feedback" && <section className="screen compact-screen"><FeedbackBox matchId={null} notify={notify} board admin={isAdmin} /></section>}
+    {screen === "guestbook" && <Guestbook notify={notify} admin={isAdmin} />}
     {screen === "admin" && isAdmin && <AdminScreen players={players} onBack={() => setScreen("select")} onArchived={(id) => { setPlayers((previous) => previous.filter((player) => player.id !== id)); setSelected((previous) => previous.filter((value) => value !== id)); }} notify={notify} />}
     {toast && <div className="toast"><Poro pose="icon" /><span>{toast}</span></div>}
   </main>;
@@ -115,6 +116,50 @@ function RegistrationScreen({ onCancel, onSaved }: { onCancel: () => void; onSav
   const usesDivision = !["UNRANKED", "MASTER", "GRANDMASTER", "CHALLENGER"].includes(rankTier);
   async function submit(event: FormEvent) { event.preventDefault(); setSaving(true); setError(""); try { const player = await api<Player>("/api/players", { method: "POST", body: JSON.stringify({ name, nickname: nickname || null, tagline: tagline || null, rankTier, rankDivision: usesDivision ? rankDivision : null, rankLp: rankTier === "UNRANKED" ? null : 0, customSkill, roleSkills: skills }) }); onSaved(player); } catch (reason) { setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); } finally { setSaving(false); } }
   return <section className="screen compact-screen"><div className="page-title"><span className="step">NEW CHALLENGER</span><h1>새 플레이어 등록</h1><p>사람 이름을 기준으로 관리하고 Riot ID는 보조 정보로 표시합니다.</p></div><div className="form-layout"><form className="arcade-panel form-card" onSubmit={submit}><div className="identity-fields"><label>사람 이름<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="이름을 입력해주세요" /></label><label>소환사 닉네임 <small>(선택)</small><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="게임 이름" /></label><label>태그 <small>(선택)</small><span className="tag-input"><i>#</i><input value={tagline} onChange={(event) => setTagline(event.target.value.replace(/^#+/, ""))} placeholder="KR1" /></span></label></div><div className="two-col"><label>솔로 랭크<select value={rankTier} onChange={(event) => setRankTier(event.target.value as RankTier)}>{["UNRANKED","IRON","BRONZE","SILVER","GOLD","PLATINUM","EMERALD","DIAMOND","MASTER","GRANDMASTER","CHALLENGER"].map((tier) => <option key={tier}>{tier}</option>)}</select></label>{usesDivision && <label>디비전<select value={rankDivision} onChange={(event) => setRankDivision(event.target.value)}>{["IV","III","II","I"].map((division) => <option key={division}>{division}</option>)}</select></label>}<label>커스텀 레이팅<input type="number" min="0" max="100" value={customSkill} onChange={(event) => setCustomSkill(Number(event.target.value))} /></label></div><div className="role-ratings"><h3>포지션별 숙련도 <span>0 — 5 · 0은 절대 배정 금지</span></h3>{ROLES.map((role) => <label key={role}><b>{roleIcon[role]} {roleLabel[role]}</b><input type="range" min="0" max="5" value={skills[role]} onChange={(event) => setSkills({ ...skills, [role]: Number(event.target.value) })} /><output>{skills[role]}</output></label>)}</div>{error && <p className="form-error">{error}</p>}<div className="form-actions"><PixelButton variant="white" onClick={onCancel}>취소</PixelButton><PixelButton type="submit" disabled={saving}><Plus size={18} /> {saving ? "저장 중..." : "등록하기"}</PixelButton></div></form><aside className="mascot-tip"><Poro pose="think" /><div><b>TIP!</b><p>숙련도 0인 포지션에는 어떤 경우에도 배정되지 않습니다.</p></div></aside></div></section>;
+}
+
+type GuestbookEntry = { id: string; authorName: string; body: string; color: number; createdAt: string };
+const NOTE_COLORS = ["#fff3a8", "#ffd6ea", "#cfe8ff", "#d6f5d6", "#eadcff"];
+
+function Guestbook({ notify, admin }: { notify: (message: string) => void; admin: boolean }) {
+  const [entries, setEntries] = useState<GuestbookEntry[] | null>(null);
+  const [authorName, setAuthorName] = useState(() => { try { return localStorage.getItem("feedback-name") ?? ""; } catch { return ""; } });
+  const [body, setBody] = useState("");
+  const [color, setColor] = useState(0);
+  const [sending, setSending] = useState(false);
+  useEffect(() => { api<GuestbookEntry[]>("/api/guestbook").then(setEntries).catch(() => setEntries([])); }, []);
+  async function submit() {
+    if (!authorName.trim() || !body.trim()) return;
+    setSending(true);
+    try {
+      const created = await api<GuestbookEntry>("/api/guestbook", { method: "POST", body: JSON.stringify({ authorName, body, color }) });
+      setEntries((previous) => [created, ...(previous ?? [])]); setBody("");
+      try { localStorage.setItem("feedback-name", authorName); } catch { /* storage unavailable */ }
+      notify("방명록에 남겼어요! ♥");
+    } catch (error) { notify(error instanceof Error ? error.message : "남기지 못했어요."); }
+    finally { setSending(false); }
+  }
+  async function remove(id: string) {
+    try { await api(`/api/guestbook/${id}`, { method: "DELETE" }); setEntries((previous) => (previous ?? []).filter((entry) => entry.id !== id)); }
+    catch (error) { notify(error instanceof Error ? error.message : "삭제하지 못했어요."); }
+  }
+  return <section className="screen compact-screen guestbook">
+    <div className="page-title"><span className="step">GUESTBOOK</span><h1>방명록</h1><p>오늘 내전 어땠어요? 한마디 남기고 가요.</p></div>
+    <div className="arcade-panel guestbook-form">
+      <input value={authorName} onChange={(event) => setAuthorName(event.target.value)} maxLength={20} placeholder="이름" aria-label="이름" />
+      <textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={300} rows={3} placeholder="예: 오늘 미드 차이 실화냐 ㅋㅋ" aria-label="방명록 내용" />
+      <div className="guestbook-form-foot">
+        <div className="note-colors" role="radiogroup" aria-label="쪽지 색">{NOTE_COLORS.map((value, index) => <button key={value} role="radio" aria-checked={color === index} aria-label={`색 ${index + 1}`} className={color === index ? "active" : ""} style={{ background: value }} onClick={() => setColor(index)} />)}</div>
+        <span className="note-count">{body.length}/300</span>
+        <PixelButton onClick={() => void submit()} disabled={sending || !authorName.trim() || !body.trim()}>{sending ? "붙이는 중..." : "♥ 남기기"}</PixelButton>
+      </div>
+    </div>
+    {entries === null ? <div className="data-state">방명록을 불러오는 중...</div> : entries.length === 0 ? <div className="data-state">첫 번째 방명록의 주인공이 되어 주세요!</div> :
+      <ul className="guestbook-notes">{entries.map((entry, index) => <li key={entry.id} style={{ background: NOTE_COLORS[entry.color] ?? NOTE_COLORS[0], rotate: `${[-1.5, 1, -0.5, 1.5, 0][index % 5]}deg` }}>
+        <p>{entry.body}</p>
+        <div><b>— {entry.authorName}</b><small>{new Date(entry.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small>{admin && <button onClick={() => void remove(entry.id)} aria-label="방명록 삭제">삭제</button>}</div>
+      </li>)}</ul>}
+  </section>;
 }
 
 type LineupRow = { role: Role; blue: string; red: string };
