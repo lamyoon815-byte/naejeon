@@ -107,3 +107,7 @@ h1,h2,h3,.step,.eyebrow,.brand,.counter b,.team header span,.versus>b,.loading-b
 .feedback-list li>p{margin:8px 0 0;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .feedback-empty{margin:16px 0 0;font-size:12px;color:#94858c}
 @media(max-width:620px){.feedback-box{padding:18px 14px}.feedback-form{grid-template-columns:1fr}.feedback-form .pixel-btn{width:100%}}
+.feedback-lineup{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding:8px 10px;background:#fff;border:1px solid #eadce3;font-size:11px}
+.feedback-lineup span{white-space:nowrap}.feedback-lineup em{font:800 9px monospace;font-style:normal;color:#94858c;margin-right:5px}
+.feedback-lineup i{font-style:normal;font-weight:800}.feedback-lineup i.blue{color:#2f7fd8}.feedback-lineup i.red{color:#e0466f}
+.feedback-lineup small{font:700 9px monospace;color:#b3a3ab;margin-left:auto}

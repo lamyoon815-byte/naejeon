@@ -45,4 +45,9 @@ export const feedbackInputSchema = z.object({
   matchId: z.string().uuid().nullable().optional().default(null),
   authorName: z.string().trim().max(20).nullable().optional().transform((value) => value ? value : null),
   body: z.string().trim().min(1, "내용을 입력해 주세요.").max(500, "500자까지 쓸 수 있어요."),
+  lineup: z.array(z.object({
+    role: z.enum(["TOP", "JUNGLE", "MID", "ADC", "SUPPORT"]),
+    blue: z.string().trim().min(1).max(30),
+    red: z.string().trim().min(1).max(30),
+  })).max(5).nullable().optional().default(null),
 });
