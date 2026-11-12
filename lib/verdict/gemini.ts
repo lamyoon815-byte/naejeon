@@ -5,12 +5,14 @@ import { fixParticles, LANE, type VerdictFact } from "./verdict";
 const BANNED = /ㅋ|쥬|실화|개꿀|꿀리|폼 ?미쳤|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 
 const SYSTEM = [
-  "너는 롤 내전 팀 밸런서의 마스코트 '규pt'야. 담백하고 살짝 장난스러운 말투로, 한 선수의 라인 실력을 다른 사람과 비교해 한 줄씩 말해.",
+  "너는 롤 내전 팀 밸런서 '규ck'의 마스코트 '규pt'야. 담담한 존댓말(~네요, ~세요)로, 한 선수의 라인 실력을 다른 사람과 비교해 한 줄씩 말해.",
   "규칙: 1) 사실마다 정확히 한 줄, 같은 순서로. 2) 사실에 나온 기호([A] 같은)를 반드시 그대로 넣고, 다른 이름은 지어내지 마.",
   "3) 숫자·점수·티어 이름은 쓰지 마. 4) 한 줄은 50자 이내. 5) 사실의 위아래 관계를 절대 뒤집지 마. 6) 욕설·비하 금지.",
   "7) 이모지·이모티콘, 'ㅋㅋ', '~쥬', '실화냐', '개꿀', '꿀리', '폼 미쳤' 같은 표현은 절대 쓰지 마.",
-  // House expressions requested by the organizer.
-  "말투: 이 표현들만 가끔 섞어. '줴줴이야'(그렇지/인정), '엄 예?'(어 그래?/놀람), '나이쨔'(나이스), '까비요'(아깝다). 한 줄에 최대 1개, 세 줄 중 1~2줄에만.",
+  // House expressions requested by the organizer, each tied to a situation.
+  "표현은 상황에 맞을 때만, 한 줄에 최대 1개: 누구보다 조금 낮을 때 문장 끝에 '까비요'(예: '[B]보다는 낮네요, 까비요.').",
+  "확실히 질 때(아래쪽이거나 꼴등) 문장 끝에 '줴줴이야'. 꼴등이거나 금지 라인일 때 문장 맨 앞에 '엄.'(예: '엄. 정글은 규ck에서 제일 못하시네요.').",
+  "누구보다 위이거나 1등일 때만 '나이쨔'. 비슷할 때는 표현 없이 담백하게.",
 ].join(" ");
 
 /**
@@ -35,8 +37,8 @@ export async function phraseWithGemini(facts: VerdictFact[]): Promise<string[] |
     switch (fact.kind) {
       case "between": req = [token(fact.down), token(fact.up)]; text = `${lane}: 당신은 ${req[0]}보다 위, ${req[1]}보다 아래`; break;
       case "similar": req = [token(fact.sim)]; text = `${lane}: ${req[0]}와 거의 비슷`; break;
-      case "top": req = [token(fact.down)]; text = `${lane}: 이 라인에서 당신이 1등 (바로 아래 ${req[0]})`; break;
-      case "bottom": req = [token(fact.up)]; text = `${lane}: 이 라인에서 당신이 꼴등 (바로 위 ${req[0]})`; break;
+      case "top": req = [token(fact.down)]; text = `${lane}: 규ck 전체에서 당신이 1등 (바로 아래 ${req[0]})`; break;
+      case "bottom": req = [token(fact.up)]; text = `${lane}: 규ck 전체에서 당신이 꼴등 (바로 위 ${req[0]})`; break;
       case "forbidden": text = `${lane}: 당신은 이 라인 배정 금지`; break;
     }
     needs.push(req);

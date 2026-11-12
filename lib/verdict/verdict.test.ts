@@ -20,7 +20,7 @@ describe("규pt verdicts", () => {
   it("mentions a forbidden lane only as forbidden", () => {
     const lines = buildVerdicts(players[3], players, first, 5);
     const mid = lines.filter((line) => line.includes("미드"));
-    expect(mid.every((line) => line.includes("금지") || line.includes("안 가는"))).toBe(true);
+    expect(mid.every((line) => line.includes("금지") || line.includes("안 가시는"))).toBe(true);
   });
 });
 
