@@ -102,7 +102,6 @@ export default function Home() {
     {screen === "result" && candidates[candidateIndex] && <ResultScreen key={candidates[candidateIndex].deterministicKey} candidate={candidates[candidateIndex]} alternativeCount={candidates.length} candidateIndex={candidateIndex} votingPath={votingPath} notify={notify} onBack={() => setScreen("select")} onNext={() => setCandidateIndex((candidateIndex + 1) % candidates.length)} onConfirm={confirm} />}
     {screen === "admin" && isAdmin && <AdminScreen players={players} onBack={() => setScreen("select")} onArchived={(id) => { setPlayers((previous) => previous.filter((player) => player.id !== id)); setSelected((previous) => previous.filter((value) => value !== id)); }} notify={notify} />}
     {toast && <div className="toast"><Poro pose="icon" /><span>{toast}</span></div>}
-    <footer><span className="brand small"><span>규</span><b>ck</b></span><p>친구들과 더 재밌는 내전을 위한 팀 밸런서</p><span>made with <Heart size={12} fill="currentColor" /> & pixels</span></footer>
   </main>;
 }
 
