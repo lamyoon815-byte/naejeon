@@ -126,3 +126,4 @@ h1,h2,h3,.step,.eyebrow,.brand,.counter b,.team header span,.versus>b,.loading-b
 .guestbook-notes li>div{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}.guestbook-notes b{font-size:12px}.guestbook-notes small{font:700 10px monospace;color:#7d6e75}
 .guestbook-notes li>div button{margin-left:auto;border:1px solid var(--ink);background:#fff;padding:3px 9px;font-size:11px;cursor:pointer}
 @media(max-width:620px){.guestbook-form{padding:16px 14px}.guestbook-form input{max-width:none}.guestbook-form-foot .pixel-btn{width:100%}.note-count{margin-left:0}}
+.admin-login{border:2px solid var(--ink);background:#fff;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;box-shadow:2px 2px 0 var(--ink);white-space:nowrap}
