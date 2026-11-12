@@ -32,7 +32,11 @@ function PixelButton({ children, onClick, disabled, variant = "pink", className 
 }
 
 function RankBadge({ player }: { player: Player }) {
-  const code = player.rankTier === "UNRANKED" ? "UR" : `${player.rankTier[0]}${player.rankDivision ?? ""}`;
+  // Apex tiers have no division: show LP in hundreds instead (Master 300LP → M3).
+  const apex: Partial<Record<Player["rankTier"], string>> = { MASTER: "M", GRANDMASTER: "GM", CHALLENGER: "C" };
+  const code = player.rankTier === "UNRANKED" ? "UR"
+    : apex[player.rankTier] ? `${apex[player.rankTier]}${Math.floor((player.rankLp ?? 0) / 100)}`
+    : `${player.rankTier[0]}${player.rankDivision ?? ""}`;
   return <span className={`rank rank-${player.rankTier.toLowerCase()}`}>{code}</span>;
 }
 
